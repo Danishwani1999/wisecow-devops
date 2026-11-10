@@ -1,0 +1,4 @@
+.git
+*.key
+*.crt
+*.pem
