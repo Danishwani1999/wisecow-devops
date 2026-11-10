@@ -1,4 +1,4 @@
-name: CI
+name: CI-CD
 
 on:
   push:
@@ -31,3 +31,32 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:latest
             ${{ env.IMAGE }}:${{ github.sha }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create temporary Kubernetes cluster
+        uses: helm/kind-action@v1
+
+      - name: Deploy manifests
+        run: |
+          kubectl apply -f k8s/deployment.yaml -f k8s/service.yaml
+          kubectl set image deployment/wisecow wisecow=${{ env.IMAGE }}:${{ github.sha }}
+          kubectl rollout status deployment/wisecow --timeout=180s
+          kubectl get pods
+
+      - name: Smoke test
+        run: |
+          kubectl port-forward svc/wisecow 8081:80 &
+          sleep 5
+          curl -sf localhost:8081
+
+      - name: Show debug info on failure
+        if: failure()
+        run: |
+          kubectl get pods
+          kubectl describe pods
+          kubectl logs deployment/wisecow --tail=50
