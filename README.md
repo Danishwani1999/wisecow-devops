@@ -3,6 +3,7 @@
 Wisecow is a small Bash web server that shows a cow saying a random fortune.
 This repository containerizes it, deploys it to Kubernetes, builds and tests
 it automatically with GitHub Actions (CI/CD), and serves it over HTTPS (TLS).
+It also contains two small operations scripts (Problem Statement 2).
 
 Original application: https://github.com/nyrahul/wisecow
 
@@ -16,10 +17,15 @@ Original application: https://github.com/nyrahul/wisecow
 | `k8s/service.yaml` | Gives the pods one stable internal address |
 | `k8s/ingress.yaml` | Routes HTTPS traffic to the Service using a TLS secret |
 | `.github/workflows/ci.yml` | CI/CD pipeline (build, push, deploy, smoke test) |
+| `scripts/health_check.py` | Application health checker (Python) |
+| `scripts/log_analyzer.sh` | Web server log analyzer (Bash) |
+| `sample/access.log` | Sample access log for the log analyzer |
 
 ## Prerequisites
 
-Docker, kubectl, kind, and openssl.
+Docker, kubectl, kind, openssl, and Python 3 (for the health checker).
+
+# Problem Statement 1
 
 ## 1. Run with Docker only
 
@@ -117,6 +123,63 @@ secret.
 - The repository is public, as required by the assessment instructions.
 - Private keys and certificates are never committed (see `.gitignore`).
 
+# Problem Statement 2
+
+Two objectives were chosen from the list: the Application Health Checker
+(Python) and the Log File Analyzer (Bash).
+
+## Application Health Checker
+
+`scripts/health_check.py` sends an HTTP request to a URL and reports whether
+the application is UP or DOWN. A status code from 200 to 399 means UP. An
+error status (4xx, 5xx) or no response at all (connection refused, timeout)
+means DOWN. The exit code is 0 when UP and 1 when DOWN, so other tools can use
+the result.
+
+```bash
+python3 scripts/health_check.py http://localhost:4499
+```
+
+Example output:
+
+```
+[2026-11-11 05:27:25] http://localhost:4499 is UP (HTTP 200)
+[2026-11-11 05:27:07] http://localhost:4499 is DOWN (no response: [Errno 111] Connection refused)
+[2026-11-11 05:27:10] https://github.com/this-page-does-not-exist-xyz is DOWN (HTTP 404)
+```
+
+## Log File Analyzer
+
+`scripts/log_analyzer.sh` analyzes an Apache or Nginx access log (combined
+format) and prints the total number of requests, the number of 404 errors, a
+count per HTTP status code, the most requested pages, the IP addresses with
+the most requests, and the pages that returned 404.
+
+```bash
+./scripts/log_analyzer.sh sample/access.log      # top 5 in each list
+./scripts/log_analyzer.sh sample/access.log 3    # top 3 in each list
+```
+
+Example output for the sample log (shortened):
+
+```
+Total requests : 20
+404 errors     : 6
+
+--- Top 5 most requested pages ---
+      5 /
+      2 /missing.html
+      ...
+
+--- Top 5 IP addresses by number of requests ---
+      5 203.0.113.7
+      4 192.168.1.10
+      ...
+```
+
+The sample log includes one IP address (203.0.113.7) probing paths such as
+`/wp-admin` and `/.env`, which is the kind of pattern the analyzer helps spot.
+
 ## Possible improvements
 
 - Deploy to a persistent cluster (cloud or self-hosted runner), or use a
@@ -124,3 +187,4 @@ secret.
 - Use cert-manager with a real domain and Let's Encrypt instead of a
   self-signed certificate.
 - Add image vulnerability scanning to the pipeline.
+- Run the health checker on a schedule and send alerts when the app is DOWN.
